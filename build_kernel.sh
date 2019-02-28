@@ -5,8 +5,10 @@ export CROSS_COMPILE=~/arm32/bin/arm-eabi-
 
 mkdir output
 
-make -C $(pwd) O=output msm8974_sec_defconfig VARIANT_DEFCONFIG=msm8974pro_sec_klte_eur_defconfig SELINUX_DEFCONFIG=selinux_defconfig
-make -j64 -C $(pwd) O=output
+#make -C $(pwd) O=output msm8974_sec_defconfig VARIANT_DEFCONFIG=msm8974pro_sec_klte_eur_defconfig SELINUX_DEFCONFIG=selinux_defconfig
+cp defconfig output/.config
+make -j4 O=output oldconfig
+make -j4 O=output
 
 cp output/arch/arm/boot/Image $(pwd)/arch/arm/boot/zImage
 
