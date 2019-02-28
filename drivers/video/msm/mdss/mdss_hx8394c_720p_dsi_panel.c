@@ -463,7 +463,7 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-	printk("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
+	printk("%s: ctrl=%pK ndx=%d\n", __func__, ctrl, ctrl->ndx);
 
 	/* +ISL98611+ */
 	isl98611_backlight_initialize(); // ISL98611 Backlight IC init ( I2C )
@@ -542,7 +542,7 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 		cancel_work_sync(&err_fg_work);
 	}
 #endif
-	printk("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
+	printk("%s: ctrl=%pK ndx=%d\n", __func__, ctrl, ctrl->ndx);
 
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
@@ -768,7 +768,6 @@ static int mdss_panel_parse_dt(struct device_node *np,
 		int rc, i, len;
 		const char *data;
 		static const char *pdest;
-		static const char *on_cmds_state, *off_cmds_state;
 		struct mdss_panel_info *pinfo = &(ctrl_pdata->panel_data.panel_info);
 		rc = of_property_read_u32(np, "qcom,mdss-dsi-panel-width", &tmp);
 		if (rc) {
@@ -1068,29 +1067,6 @@ static int mdss_panel_parse_dt(struct device_node *np,
 		mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_duty_82,
 			"samsung,cabc-duty-82", "qcom,mdss-dsi-on-command-state");
 #endif
-
-		on_cmds_state = of_get_property(np,
-					"qcom,mdss-dsi-on-command-state", NULL);
-		if (!strncmp(on_cmds_state, "dsi_lp_mode", 11)) {
-			ctrl_pdata->dsi_on_state = DSI_LP_MODE;
-		} else if (!strncmp(on_cmds_state, "dsi_hs_mode", 11)) {
-			ctrl_pdata->dsi_on_state = DSI_HS_MODE;
-		} else {
-			pr_debug("%s: ON cmds state not specified. Set Default\n",
-								__func__);
-			ctrl_pdata->dsi_on_state = DSI_LP_MODE;
-		}
-
-		off_cmds_state = of_get_property(np, "qcom,mdss-dsi-off-command-state", NULL);
-		if (!strncmp(off_cmds_state, "dsi_lp_mode", 11)) {
-			ctrl_pdata->dsi_off_state = DSI_LP_MODE;
-		} else if (!strncmp(off_cmds_state, "dsi_hs_mode", 11)) {
-			ctrl_pdata->dsi_off_state = DSI_HS_MODE;
-		} else {
-			pr_debug("%s: ON cmds state not specified. Set Default\n",
-								__func__);
-			ctrl_pdata->dsi_off_state = DSI_LP_MODE;
-		}
 
 		return 0;
 	error:
@@ -1401,7 +1377,7 @@ static void load_tuning_file(char *filename)
 	filp = filp_open(filename, O_RDONLY, 0);
 	if (IS_ERR(filp)) {
 		printk(KERN_ERR "%s File open failed\n", __func__);
-		return;
+		goto err;
 	}
 
 	l = filp->f_path.dentry->d_inode->i_size;
@@ -1411,7 +1387,7 @@ static void load_tuning_file(char *filename)
 	if (dp == NULL) {
 		pr_info("Can't not alloc memory for tuning file load\n");
 		filp_close(filp, current->files);
-		return;
+		goto err;
 	}
 	pos = 0;
 	memset(dp, 0, l);
@@ -1424,7 +1400,7 @@ static void load_tuning_file(char *filename)
 		pr_info("vfs_read() filed ret : %d\n", ret);
 		kfree(dp);
 		filp_close(filp, current->files);
-		return;
+		goto err;
 	}
 
 	filp_close(filp, current->files);
@@ -1434,6 +1410,10 @@ static void load_tuning_file(char *filename)
 	sending_tune_cmd(dp, l);
 
 	kfree(dp);
+
+	return;
+err:
+	set_fs(fs);
 }
 
 static ssize_t tuning_show(struct device *dev,

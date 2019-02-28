@@ -266,10 +266,16 @@ void mDNIe_Set_Mode(void)
 		INPUT_PAYLOAD2(blind_tune_value[mdnie_tun_state.accessibility][1]);
 	}
 
-	else if (mdnie_msd->dstat.auto_brightness == 6) {
+	else if (mdnie_msd->dstat.auto_brightness >= 6 && mdnie_msd->dstat.bright_level == 255) {
 		DPRINT("[LOCAL CE] HBM mode! only LOCAL CE tuning\n");
+		if((mdnie_tun_state.scenario == mDNIe_BROWSER_MODE)||(mdnie_tun_state.scenario == mDNIe_eBOOK_MODE)) {
+			INPUT_PAYLOAD1(LOCAL_CE_TEXT_1);
+			INPUT_PAYLOAD2(LOCAL_CE_TEXT_2);
+		}
+		else {
 			INPUT_PAYLOAD1(LOCAL_CE_1);
 			INPUT_PAYLOAD2(LOCAL_CE_2);
+	}
 	}
 
 #if defined(CONFIG_TDMB)
@@ -629,25 +635,37 @@ static ssize_t accessibility_store(struct device *dev,
 		&buffer2[0], &buffer2[1], &buffer2[2], &buffer2[3], &buffer2[4],
 		&buffer2[5], &buffer2[6], &buffer2[7], &buffer2[8]);
 
-	for(loop = 0; loop < MDNIE_COLOR_BLINDE_CMD/2; loop++) {
-		buffer2[loop] = buffer2[loop] & 0xFFFF;
-
-		buffer[loop * 2] = (buffer2[loop] & 0xFF00) >> 8;
-		buffer[loop * 2 + 1] = buffer2[loop] & 0xFF;
-	}
-
-	for(loop = 0; loop < MDNIE_COLOR_BLINDE_CMD; loop+=2) {
-		temp = buffer[loop];
-		buffer[loop] = buffer[loop + 1];
-		buffer[loop + 1] = temp;
-	}
-
 	backup = mdnie_tun_state.accessibility;
 
 	if (cmd_value == NEGATIVE) {
 		mdnie_tun_state.accessibility = NEGATIVE;
 	} else if (cmd_value == COLOR_BLIND) {
 		mdnie_tun_state.accessibility = COLOR_BLIND;
+
+		memcpy(buffer,&COLOR_BLIND_2[MDNIE_COLOR_BLINDE_OFFSET],
+				MDNIE_COLOR_BLINDE_CMD);
+
+	for(loop = 0; loop < MDNIE_COLOR_BLINDE_CMD/2; loop++) {
+		buffer2[loop] = buffer2[loop] & 0xFFFF;
+
+			temp = buffer[loop * 2];
+			temp &= 0xFC;
+			temp |= ((buffer2[loop] & 0xFF) >> 6) & 0x03;
+			buffer[loop * 2] = temp;
+
+			temp = buffer[loop * 2 + 1];
+			temp &= 0x03;
+			temp |= ((buffer2[loop] & 0xFF) << 2) & 0xFC;
+			temp &= 0xFC;
+			temp |= (((buffer2[loop] & 0xFF00) >> 8) >> 6) & 0x03;
+			buffer[loop * 2 + 1] = temp;
+
+			temp = buffer[loop * 2 + 2];
+			temp &= 0x03;
+			temp |= (((buffer2[loop] & 0xFF00) >> 8) << 2) & 0xFC;
+			buffer[loop * 2 + 2] = temp;
+	}
+
 		memcpy(&COLOR_BLIND_2[MDNIE_COLOR_BLINDE_OFFSET],
 				buffer, MDNIE_COLOR_BLINDE_CMD);
 	} else if (cmd_value == SCREEN_CURTAIN) {
@@ -719,7 +737,11 @@ static DEVICE_ATTR(sensorRGB, 0664, sensorRGB_show, sensorRGB_store);
 #define MAX_FILE_NAME	128
 #define TUNING_FILE_PATH "/sdcard/"
 static char tuning_file[MAX_FILE_NAME];
-
+#if 0
+/* 
+ * Do not use below code but only for Image Quality Debug in Developing Precess.
+ * Do not comment in this code Because there are contained vulnerability.
+ */
 static char char_to_dec(char data1, char data2)
 {
 	char dec;
@@ -801,7 +823,7 @@ static void load_tuning_file(char *filename)
 	filp = filp_open(filename, O_RDONLY, 0);
 	if (IS_ERR(filp)) {
 		printk(KERN_ERR "%s File open failed\n", __func__);
-		return;
+		goto err;
 	}
 
 	l = filp->f_path.dentry->d_inode->i_size;
@@ -811,7 +833,7 @@ static void load_tuning_file(char *filename)
 	if (dp == NULL) {
 		pr_info("Can't not alloc memory for tuning file load\n");
 		filp_close(filp, current->files);
-		return;
+		goto err;
 	}
 	pos = 0;
 	memset(dp, 0, l);
@@ -824,7 +846,7 @@ static void load_tuning_file(char *filename)
 		pr_info("vfs_read() filed ret : %d\n", ret);
 		kfree(dp);
 		filp_close(filp, current->files);
-		return;
+		goto err;
 	}
 
 	filp_close(filp, current->files);
@@ -834,7 +856,12 @@ static void load_tuning_file(char *filename)
 	sending_tune_cmd(dp, l);
 
 	kfree(dp);
+
+	return;
+err:
+	set_fs(fs);
 }
+#endif
 
 static ssize_t tuning_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
@@ -849,7 +876,16 @@ static ssize_t tuning_show(struct device *dev,
 static ssize_t tuning_store(struct device *dev,
 			struct device_attribute *attr, const char *buf, size_t size)
 {
+/* 
+ * Do not use below code but only for Image Quality Debug in Developing Precess.
+ * Do not comment in this code Because there are contained vulnerability.
+ */
+/*
 	char *pt;
+
+	if (buf == NULL || strchr(buf, '.') || strchr(buf, '/'))
+		return size;
+
 	memset(tuning_file, 0, sizeof(tuning_file));
 	snprintf(tuning_file, MAX_FILE_NAME, "%s%s", TUNING_FILE_PATH, buf);
 
@@ -865,7 +901,7 @@ static ssize_t tuning_store(struct device *dev,
 	DPRINT("%s\n", tuning_file);
 
 	load_tuning_file(tuning_file);
-
+*/
 	return size;
 }
 static DEVICE_ATTR(tuning, S_IRUGO | S_IWUSR | S_IWGRP,

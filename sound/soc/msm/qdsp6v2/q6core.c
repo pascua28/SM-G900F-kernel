@@ -20,10 +20,11 @@
 #include <linux/slab.h>
 #include <mach/msm_smd.h>
 #include <mach/qdsp6v2/apr.h>
-#include "q6core.h"
 #include <mach/ocmem.h>
+#include <sound/q6core.h>
 
 #define TIMEOUT_MS 1000
+#define Q6_READY_TIMEOUT_MS 100
 
 struct q6core_str {
 	struct apr_svc *core_handle_q;
@@ -228,20 +229,23 @@ bool q6core_is_adsp_ready(void)
 	hdr.opcode = AVCS_CMD_ADSP_EVENT_GET_STATE;
 
 	ocm_core_open();
-	q6core_lcl.bus_bw_resp_received = 0;
-	rc = apr_send_pkt(q6core_lcl.core_handle_q, (uint32_t *)&hdr);
-	if (rc < 0) {
-		pr_err("%s: Get ADSP state APR packet send event\n", __func__);
-		goto bail;
-	}
+	if (q6core_lcl.core_handle_q) {
+		q6core_lcl.bus_bw_resp_received = 0;
+		rc = apr_send_pkt(q6core_lcl.core_handle_q, (uint32_t *)&hdr);
+		if (rc < 0) {
+			pr_err("%s: Get ADSP state APR packet send event %d\n",
+				__func__, rc);
+			goto bail;
+		}
 
-	rc = wait_event_timeout(q6core_lcl.bus_bw_req_wait,
-				(q6core_lcl.bus_bw_resp_received == 1),
-				msecs_to_jiffies(TIMEOUT_MS));
-	if (rc > 0 && q6core_lcl.bus_bw_resp_received) {
-		/* ensure to read updated param by callback thread */
-		rmb();
-		ret = !!q6core_lcl.param;
+		rc = wait_event_timeout(q6core_lcl.bus_bw_req_wait,
+					(q6core_lcl.bus_bw_resp_received == 1),
+					msecs_to_jiffies(Q6_READY_TIMEOUT_MS));
+		if (rc > 0 && q6core_lcl.bus_bw_resp_received) {
+			/* ensure to read updated param by callback thread */
+			rmb();
+			ret = !!q6core_lcl.param;
+		}
 	}
 bail:
 	pr_debug("%s: leave, rc %d, adsp ready %d\n", __func__, rc, ret);

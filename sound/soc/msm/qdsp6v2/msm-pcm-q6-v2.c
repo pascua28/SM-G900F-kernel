@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,6 +26,7 @@
 #include <sound/initval.h>
 #include <sound/control.h>
 #include <sound/q6audio-v2.h>
+#include <sound/timer.h>
 #include <asm/dma.h>
 #include <linux/dma-mapping.h>
 #include <linux/msm_audio_ion.h>
@@ -37,7 +38,6 @@
 #include "msm-pcm-q6-v2.h"
 #include "msm-pcm-routing-v2.h"
 
-#define DUALWAVE_ENABLE
 #ifdef DUALWAVE_ENABLE 
 #include <linux/syscalls.h>
 #include <asm/uaccess.h>
@@ -280,6 +280,18 @@ static void event_handler(uint32_t opcode,
 		}
 	}
 	break;
+	case RESET_EVENTS:
+		pr_err("%s RESET_EVENTS\n", __func__);
+		prtd->pcm_irq_pos += prtd->pcm_count;
+		atomic_inc(&prtd->out_count);
+		atomic_inc(&prtd->in_count);
+		prtd->reset_event = true;
+		if (atomic_read(&prtd->start))
+			snd_pcm_period_elapsed(substream);
+		wake_up(&the_locks.eos_wait);
+		wake_up(&the_locks.write_wait);
+		wake_up(&the_locks.read_wait);
+		break;
 	default:
 		pr_debug("Not Supported Event opcode[0x%x]\n", opcode);
 		break;
@@ -588,6 +600,7 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 
 	prtd->dsp_cnt = 0;
 	prtd->set_channel_map = false;
+	prtd->reset_event = false;
 	runtime->private_data = prtd;
 
 	return 0;
@@ -610,11 +623,22 @@ static int msm_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 	fbytes = frames_to_bytes(runtime, frames);
 	pr_debug("%s: prtd->out_count = %d\n",
 				__func__, atomic_read(&prtd->out_count));
+
+	if (prtd->reset_event) {
+		pr_err("%s: In SSR return ENETRESET before wait\n", __func__);
+		return -ENETRESET;
+	}
+
 	ret = wait_event_timeout(the_locks.write_wait,
 			(atomic_read(&prtd->out_count)), 5 * HZ);
 	if (!ret) {
 		pr_err("%s: wait_event_timeout failed\n", __func__);
 		goto fail;
+	}
+
+	if (prtd->reset_event) {
+		pr_err("%s: In SSR return ENETRESET after wait\n", __func__);
+		return -ENETRESET;
 	}
 
 	if (!atomic_read(&prtd->out_count)) {
@@ -681,6 +705,8 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->be_id,
 						SNDRV_PCM_STREAM_PLAYBACK);
 	kfree(prtd);
+	runtime->private_data = NULL;
+
 	return 0;
 }
 
@@ -707,11 +733,19 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 	pr_debug("hw_ptr %d\n", (int)runtime->status->hw_ptr);
 	pr_debug("avail_min %d\n", (int)runtime->control->avail_min);
 
+	if (prtd->reset_event) {
+		pr_err("%s: In SSR return ENETRESET before wait\n", __func__);
+		return -ENETRESET;
+	}
 	ret = wait_event_timeout(the_locks.read_wait,
 			(atomic_read(&prtd->in_count)), 5 * HZ);
 	if (!ret) {
 		pr_debug("%s: wait_event_timeout failed\n", __func__);
 		goto fail;
+	}
+	if (prtd->reset_event) {
+		pr_err("%s: In SSR return ENETRESET after wait\n", __func__);
+		return -ENETRESET;
 	}
 	if (!atomic_read(&prtd->in_count)) {
 		pr_debug("%s: pcm stopped in_count 0\n", __func__);
@@ -776,6 +810,7 @@ static int msm_pcm_capture_close(struct snd_pcm_substream *substream)
 	msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->be_id,
 		SNDRV_PCM_STREAM_CAPTURE);
 	kfree(prtd);
+	runtime->private_data = NULL;
 
 	return 0;
 }

@@ -2339,7 +2339,7 @@ static ssize_t cmd_store(struct device *dev, struct device_attribute *attr,
 				start = pos + 1;
 			}
 			pos++;
-		} while (pos - buf <= length);
+		} while ((pos - buf <= length) && (param_cnt < CMD_PARAM_NUM));
 	}
 
 	dev_info(&rmi4_data->i2c_client->dev, "%s: Command = %s\n",
@@ -2412,7 +2412,7 @@ static ssize_t cmd_list_show(struct device *dev,
 	snprintf(buffer, 30, "++factory command list++\n");
 	while (strncmp(ft_cmds[ii].cmd_name, "not_support_cmd", 16) != 0) {
 		snprintf(buffer_name, CMD_STR_LEN, "%s\n", ft_cmds[ii].cmd_name);
-		strcat(buffer, buffer_name);
+		strncat(buffer, buffer_name, strlen(buffer_name));
 		ii++;
 		if (strlen(buffer) > (CMD_RESULT_STR_LEN - CMD_STR_LEN)) {
 			dev_info(&f54->rmi4_data->i2c_client->dev,
@@ -2437,8 +2437,13 @@ static bool synaptics_skip_firmware_update(struct synaptics_rmi4_data *rmi4_data
 	if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5100) &&
 		(rmi4_data->ic_revision_of_ic >= SYNAPTICS_IC_REVISION_A2)) {
 #if !defined(CONFIG_SEC_HESTIA_PROJECT)
-		rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2];
-		rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2];
+		if (strncmp(rmi4_data->dt_data->project, "PSLTE", 5) == 0) {
+			rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_PS];
+			rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_PS];
+		} else {
+			rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2];
+			rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2];
+		}
 #else
 		rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5050];
 		rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5050];
@@ -2596,8 +2601,13 @@ static int synaptics_load_fw_from_kernel(struct synaptics_rmi4_data *rmi4_data, 
 	if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5100) &&
 		(rmi4_data->ic_revision_of_ic >= SYNAPTICS_IC_REVISION_A2)) {
 #if !defined(CONFIG_SEC_HESTIA_PROJECT)
-		rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2];
-		rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2];
+		if (strncmp(rmi4_data->dt_data->project, "PSLTE", 5) == 0) {
+			rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_PS];
+			rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_PS];
+		} else {
+			rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2];
+			rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2];
+		}
 #else
 		rmi4_data->ic_revision_of_bin = (int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5050];
 		rmi4_data->fw_version_of_bin = (int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5050];
@@ -2676,11 +2686,19 @@ static int synaptics_load_fw_from_ums(struct synaptics_rmi4_data *rmi4_data)
 			if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5100) &&
 				(rmi4_data->ic_revision_of_ic >= SYNAPTICS_IC_REVISION_A2)) {
 #if !defined(CONFIG_SEC_HESTIA_PROJECT)
-				ic_revision_of_bin = (int)fw_data[IC_REVISION_BIN_OFFSET_S5100_A2];
-				fw_version_of_bin = (int)fw_data[FW_VERSION_BIN_OFFSET_S5100_A2];
-				fw_release_date_of_bin =
-					(int)(fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_A2] << 8
-							| fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_A2 + 1]);
+				if (strncmp(rmi4_data->dt_data->project, "PSLTE", 5) == 0) {
+					ic_revision_of_bin = (int)fw_data[IC_REVISION_BIN_OFFSET_S5100_PS];
+					fw_version_of_bin = (int)fw_data[FW_VERSION_BIN_OFFSET_S5100_PS];
+					fw_release_date_of_bin =
+						(int)(fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_PS] << 8
+								| fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_PS + 1]);
+				} else {
+					ic_revision_of_bin = (int)fw_data[IC_REVISION_BIN_OFFSET_S5100_A2];
+					fw_version_of_bin = (int)fw_data[FW_VERSION_BIN_OFFSET_S5100_A2];
+					fw_release_date_of_bin =
+						(int)(fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_A2] << 8
+								| fw_data[DATE_OF_FIRMWARE_BIN_OFFSET_S5100_A2 + 1]);
+				}
 #else
 				ic_revision_of_bin = (int)fw_data[IC_REVISION_BIN_OFFSET_S5050];
 				fw_version_of_bin = (int)fw_data[FW_VERSION_BIN_OFFSET_S5050];
@@ -2853,9 +2871,15 @@ static void get_fac_fw_ver_bin(void)
 		if ((rmi4_data->ic_version == SYNAPTICS_PRODUCT_ID_S5100) &&
 			(rmi4_data->ic_revision_of_ic >= SYNAPTICS_IC_REVISION_A2))
 #if !defined(CONFIG_SEC_HESTIA_PROJECT)
-			snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "SY00%02X%02X",
-					(int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2],
-					(int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2]);
+			if (strncmp(rmi4_data->dt_data->project, "PSLTE", 5) == 0) {
+				snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "SY00%02X%02X",
+						(int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_PS],
+						(int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_PS]);
+			} else {
+				snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "SY00%02X%02X",
+						(int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5100_A2],
+						(int)fw_entry->data[FW_VERSION_BIN_OFFSET_S5100_A2]);
+			}
 #else
 			snprintf(data->cmd_buff, CMD_RESULT_STR_LEN, "SY00%02X%02X",
 					(int)fw_entry->data[IC_REVISION_BIN_OFFSET_S5050],

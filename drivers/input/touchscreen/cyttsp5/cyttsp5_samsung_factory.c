@@ -1476,6 +1476,11 @@ static ssize_t store_cmd(struct device *dev, struct device_attribute
 	char delim = ',';
 	bool cmd_found = false;
 
+	if (strlen(buf) >= FACTORY_CMD_STR_LEN) {
+		dev_err(sfd->dev, "%s: cmd length is over(%s,%d)!!\n", __func__, buf, (int)strlen(buf));
+		return -EINVAL;
+	}
+
 	if (sfd->factory_cmd_is_running == true) {
 		dev_err(sfd->dev, "factory_cmd: other cmd is running.\n");
 		goto err_out;
@@ -1538,7 +1543,7 @@ static ssize_t store_cmd(struct device *dev, struct device_attribute
 				param_cnt++;
 			}
 			cur++;
-		} while (cur - buf <= len);
+		} while ((cur - buf <= len) && (param_cnt < FACTORY_CMD_PARAM_NUM));
 	}
 
 	dev_info(sfd->dev, "cmd = %s\n", factory_cmd_ptr->cmd_name);
@@ -1810,6 +1815,14 @@ int cyttsp5_samsung_factory_probe(struct device *dev)
 	}
 	dev_dbg(dev, "%s sfd->factory_dev->devt=%d\n",
 		__func__, sfd->factory_dev->devt);
+
+	rc = sysfs_create_link(&sfd->factory_dev->kobj,
+		&cd->md.input->dev.kobj, "input");
+	if (rc < 0) {
+		dev_err(sfd->dev,
+			"%s: Failed to create input symbolic link\n",
+			__func__);
+	}
 
 	rc = sysfs_create_group(&sfd->factory_dev->kobj,
 		&sec_touch_factory_attr_group);

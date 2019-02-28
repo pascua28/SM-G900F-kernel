@@ -42,9 +42,12 @@
 #define MAX_ACTUATOR_REGION 5
 #define MAX_ACTUATOR_INIT_SET 12
 #define MAX_ACTUATOR_REG_TBL_SIZE 8
+#define MAX_ACTUATOR_AF_TOTAL_STEPS 1024
 
 #define MOVE_NEAR 0
 #define MOVE_FAR  1
+#define MSM_ACTUATOR_MOVE_SIGNED_FAR -1
+#define MSM_ACTUATOR_MOVE_SIGNED_NEAR  1
 
 #define MAX_EEPROM_NAME 32
 
@@ -455,7 +458,7 @@ struct msm_eeprom_cfg_data {
 	enum eeprom_cfg_type_t cfgtype;
 	uint16_t is_supported;
 	union {
-		char eeprom_name[MAX_SENSOR_NAME];
+		char eeprom_name[MAX_EEPROM_NAME];
 		struct eeprom_get_t get_data;
 		struct eeprom_read_t read_data;
 		struct eeprom_write_t write_data;

@@ -185,7 +185,7 @@ static int tsp_power_enabled;
 #if defined(CONFIG_MACH_MILLET3G_CHN_OPEN)
 #define FW_VERSION_DATE "140415"
 #endif
-#define FW_VERSION_EL 0x16
+#define FW_VERSION_EL 0x18
 
 #define MAX_FW_PATH 255
 #define TSP_FW_FILENAME "melfas_fw.bin"
@@ -2712,6 +2712,11 @@ static ssize_t store_cmd(struct device *dev, struct device_attribute
 	int param_cnt = 0;
 	int ret;
 
+	if (strlen(buf) >= TSP_CMD_STR_LEN) {
+		dev_err(&info->client->dev, "%s: cmd length is over(%s,%d)!!\n", __func__, buf, (int)strlen(buf));
+		return -EINVAL;
+	}
+
 	if (info->cmd_is_running == true) {
 		dev_err(&info->client->dev, "tsp_cmd: other cmd is running.\n");
 		goto err_out;
@@ -2773,7 +2778,7 @@ static ssize_t store_cmd(struct device *dev, struct device_attribute
 				param_cnt++;
 			}
 			cur++;
-		} while (cur - buf <= len);
+		} while ((cur - buf <= len) && (param_cnt < TSP_CMD_PARAM_NUM));
 	}
 
 	dev_info(&client->dev, "cmd = %s\n", tsp_cmd_ptr->cmd_name);
@@ -4169,6 +4174,12 @@ static int __devinit mms_ts_probe(struct i2c_client *client,
 	if (ret)
 		dev_err(&client->dev, "Failed to create sysfs group\n");
 
+	ret = sysfs_create_link(&fac_dev_ts->kobj, &info->input_dev->dev.kobj, "input");
+	if (ret < 0) {
+		dev_err(&client->dev,
+				"%s: Failed to create input symbolic link\n",
+				__func__);
+	}
 #endif
 	return 0;
 
