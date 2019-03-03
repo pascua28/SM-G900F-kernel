@@ -23,7 +23,6 @@
 #include <linux/input.h>
 #include <linux/log2.h>
 #include <linux/qpnp/power-on.h>
-#ifdef CONFIG_SEC_DEBUG
 
 #ifdef CONFIG_WAKE_GESTURES
 #include <linux/wake_gestures.h>
